@@ -2,12 +2,14 @@
 # Imports
 from enum import unique
 import os
+import datetime
 import numpy as np
 import pandas as pd
 from PIL import Image
 from torch.utils.tensorboard import SummaryWriter
 
 from torch import nn
+from torchvision import models
 import torch
 import torchvision
 from torch.utils.data import Dataset, DataLoader
@@ -111,6 +113,13 @@ def train(model, train_loader, optimiser, lf, epochs=10, writer=None):
                     running_loss = 0.0
                     # running_correct = 0
 
+        # Save model weights after every epoch
+        model_dir = 'model_' + datetime.today().strftime('%Y-%m-%d_%H:%M:%S')
+        filename = f'parameters_epoch_{epoch}.pt'
+
+        path = os.path.join('model_evaluation', model_dir, 'weights', filename)
+        torch.save(model.state_dict(), path)
+
         print(f'Finished training epoch {epoch}')
 
 #%%
@@ -141,12 +150,28 @@ lr = 1e-3
 device = torch.device('cpu') # 'cuda' if torch.cuda.is_availabe() else 'cpu')
 model = ConvNet().to(device)
 
+#%%
+# Fine-tuning ResNET50
+
+tuned_model = models.resnet50(pretrained=True)
+
+# Get number of features (just before final layer) so
+# we can recreate the final layer properly, but with
+# our own categories
+num_features = tuned_model.fc.in_features
+
+# Recreate final layer with same number of features
+tuned_model.fc = nn.Linear(num_features, 13) # we want to classify into 13
+tuned_model.to(device)
+
+model = tuned_model # reassign model so we can train it!
+
+#%%
+# Model training cell
+
 # Set up loss function and optimiser method
 lf = nn.CrossEntropyLoss()
 optimiser = torch.optim.SGD(model.parameters(), lr=lr)
 
-
-
 # Train model
 train(model, train_loader, optimiser, lf, epochs=10, writer=writer)
-# %%
